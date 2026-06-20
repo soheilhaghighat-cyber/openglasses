@@ -69,6 +69,16 @@ struct TakePhotoIntent: AppIntent {
 struct OpenGlassesShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: AskQuestionIntent(),
+            phrases: [
+                "Ask \(.applicationName) \(\.$question)",
+                "Ask \(.applicationName) about \(\.$question)",
+                "Tell \(.applicationName) \(\.$question)"
+            ],
+            shortTitle: "Ask a Question",
+            systemImageName: "bubble.left.and.bubble.right.fill"
+        )
+        AppShortcut(
             intent: AskOpenGlassesIntent(),
             phrases: [
                 "Ask \(.applicationName)",

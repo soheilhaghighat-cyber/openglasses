@@ -43,6 +43,19 @@ Each persona has its own wake word, AI model, and personality. All listen simult
 
 **Configure:** Settings → Personas → Add. Pick a wake word, assign a model and prompt preset.
 
+### "Hey Siri" — Ask by Voice Without the Wake Word
+
+OpenGlasses ships App Intents + Siri Shortcuts, so you can drive it straight from Siri — handy when the glasses' own "Hey Meta" is busy, or to start a query hands-free without waiting for the in-app wake word:
+
+| Say | What Happens |
+|-----|-------------|
+| "Hey Siri, ask OpenGlasses what's the weather" | Routes the spoken question through your model/persona pipeline; **Siri reads the answer back** |
+| "Hey Siri, ask OpenGlasses" | Siri prompts "What would you like to ask?", then answers |
+| "Hey Siri, OpenGlasses take a photo" | Captures via the glasses and describes the scene |
+| "Hey Siri, OpenGlasses describe surroundings" | Accessibility scene description |
+
+The first time, iOS surfaces these in the **Shortcuts** app and the Siri phrase picker (you can rename the phrase to anything you like). Because Siri carries the spoken text as a parameter, the conversational intent runs in the background and speaks the result — no need to bring the app forward.
+
 ### On-Device Local LLM
 
 Run AI models entirely on your iPhone — no internet, no cloud, no API keys.
