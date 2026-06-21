@@ -76,6 +76,18 @@ Run AI models entirely on your iPhone — no internet, no cloud, no API keys.
 
 **Gemma 4 E2B** is the default on-device agent — it runs automatically when no cloud model is configured. Models are stored persistently and work fully offline after download. Toggle **Offline Mode** in Settings → Tools to disable internet-dependent tools.
 
+### Self-Hosted Local Server (Ollama, llama.cpp, vLLM…)
+
+Prefer to run a bigger model on a desktop or home server and keep everything on your own network? Point OpenGlasses at any **OpenAI-compatible** endpoint — no cloud, no API key:
+
+1. Settings → AI Models → Add Model → pick **"Custom (OpenAI-compatible)"**
+2. Set the **Base URL** to your server, e.g. `http://your-mac.local:11434/v1` (Ollama), and **leave the API Key blank**
+3. Tap **Fetch models** to list what the server has, or type a model ID (e.g. `llava` for vision). Turn on **Vision** to send glasses photos.
+
+Works with **Ollama, llama.cpp server, LM Studio, vLLM, and LocalAI**. Your photos, voice, and conversations never leave the machine running the server.
+
+> **Reaching the server:** use the host's **`.local` mDNS name** (`http://mymac.local:11434/v1`) or a **Tailscale** address (`*.ts.net`, already allow-listed) rather than a raw `192.168.x.x` IP — iOS App Transport Security can block cleartext `http://` to a bare private IP, but allows `.local`, loopback, and the Tailscale exception.
+
 ### Fully Offline Voice Mode
 
 Run the **entire voice loop on-device** — nothing leaves your iPhone:
