@@ -4,9 +4,11 @@
 Custom (OpenAI-compatible) provider already on
 `claude/siri-meta-glasses-integration-g0q7xf`:
 
-> **Already shipped on the branch:** a conversational `AskQuestionIntent`
-> ("Hey Siri, ask OpenGlasses <question>") that routes spoken text through the
-> existing `sendTextMessage` LLM/persona pipeline and has Siri speak the answer;
+> **Already shipped on the branch:** a conversational, two-step `AskQuestionIntent`
+> ("Hey Siri, ask OpenGlasses a question" → Siri prompts for and awaits the
+> spoken question — App Shortcut phrases can't embed free-form `String`
+> parameters) that routes the question through the existing `sendTextMessage`
+> LLM/persona pipeline and has Siri speak the answer;
 > `sendTextMessage(speakResponse:)` to avoid double TTS; a trimmed 10-shortcut
 > `AppShortcutsProvider`; `Config.siriAskOpensApp` + a Settings toggle; and
 > keyless self-hosted local-server support in `ModelFetcher` / `ModelFormView`

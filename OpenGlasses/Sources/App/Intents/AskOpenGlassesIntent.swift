@@ -68,12 +68,18 @@ struct TakePhotoIntent: AppIntent {
 /// Register shortcuts so they appear in the Shortcuts app and Action Button picker.
 struct OpenGlassesShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        // NOTE: App Shortcut phrases may only interpolate parameters whose type is
+        // an AppEntity or AppEnum — Siri needs a finite, resolvable set to predict
+        // against. A free-form String like `$question` is rejected by the AppIntents
+        // metadata processor with a *halting* error that wipes ALL exported intent
+        // metadata, so the spoken question can't ride inside the phrase. Instead the
+        // phrase invokes the intent and Siri resolves the question two-step via the
+        // parameter's `requestValueDialog`.
         AppShortcut(
             intent: AskQuestionIntent(),
             phrases: [
-                "Ask \(.applicationName) \(\.$question)",
-                "Ask \(.applicationName) about \(\.$question)",
-                "Tell \(.applicationName) \(\.$question)"
+                "Ask \(.applicationName) a question",
+                "Question for \(.applicationName)"
             ],
             shortTitle: "Ask a Question",
             systemImageName: "bubble.left.and.bubble.right.fill"
