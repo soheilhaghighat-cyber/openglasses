@@ -1012,6 +1012,11 @@ struct HardwarePrivacyView: View {
                         }
                     }
                 }
+                NavigationLink {
+                    InsightsView().environmentObject(appState)
+                } label: {
+                    Label("Insights", systemImage: "chart.bar")
+                }
                 InfoToggle(
                     title: "Use Phone Mic for Translation",
                     isOn: Binding(

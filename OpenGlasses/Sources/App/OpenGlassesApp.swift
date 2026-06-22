@@ -936,6 +936,9 @@ class AppState: ObservableObject, AppStateProtocol {
             Task { @MainActor in await self?.speechService.speak(message) }
         }
 
+        // Memory & Recall Phase 4 — on-device usage insights from conversation history.
+        InsightsService.shared.configure(conversationStore: conversationStore)
+
         // Field Assist Phase 5 (Plan K2): expert stream bridge for escalations. Transport
         // (MJPEG / WebRTC) is selected in Settings; MJPEG is the working default.
         EscalationCoordinator.shared.bridge = ExpertStreamBridge(
