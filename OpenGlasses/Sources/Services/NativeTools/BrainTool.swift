@@ -16,15 +16,18 @@ struct BrainTool: NativeTool {
     a person wants, is looking for, or you owe them ('Bob wants a copy of the deck') — and 'needs' \
     lists open follow-ups (per person, or all); 'resolve_need' marks one done. 'recall' searches \
     your PAST CONVERSATIONS (what you actually said in earlier sessions) and returns a cited \
-    answer — use for "what did we decide about X?", "what did I say about Y last week?".
+    answer — use for "what did we decide about X?", "what did I say about Y last week?". \
+    'insights' gives an on-device usage recap (top topics + activity over the last N days) — \
+    use for "what have I been up to this week?", "give me my usage recap".
     """
 
     var parametersSchema: [String: Any] {
         [
             "type": "object",
             "properties": [
-                "action": ["type": "string", "description": "query, recall, person, link, encounters, save_need, needs, resolve_need, forget, or status",
-                           "enum": ["query", "recall", "person", "link", "encounters", "save_need", "needs", "resolve_need", "forget", "status"]],
+                "action": ["type": "string", "description": "query, recall, insights, person, link, encounters, save_need, needs, resolve_need, forget, or status",
+                           "enum": ["query", "recall", "insights", "person", "link", "encounters", "save_need", "needs", "resolve_need", "forget", "status"]],
+                "days": ["type": "integer", "description": "On 'insights': how many days back to recap (default 7)."],
                 "question": ["type": "string", "description": "On 'query': what to look up across memory. On 'recall': what to find in past conversations (may include 'yesterday'/'last week')."],
                 "person": ["type": "string", "description": "On 'person'/'encounters'/'save_need'/'needs'/'resolve_need'/'forget': the person or entity name."],
                 "source": ["type": "string", "description": "On 'link': subject entity (e.g. 'Alice')."],
@@ -60,6 +63,11 @@ struct BrainTool: NativeTool {
             }
             let answer = await RecallService.shared.recall(question)
             return answer.summary
+
+        case "insights", "usage", "recap":
+            let days = (args["days"] as? Int) ?? (args["days"] as? Double).map(Int.init) ?? 7
+            let report = InsightsService.shared.report(days: days)
+            return InsightsService.shared.recapText(report, days: days)
 
         case "person", "dossier", "who":
             guard let person = (args["person"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -145,7 +153,7 @@ struct BrainTool: NativeTool {
                    "Semantic memory \(memoryCount); \(docCount) documents; \(SocialContextStore.shared.allPeople().count) people with notes."
 
         default:
-            return "Unknown action. Use: query, recall, person, link, encounters, save_need, needs, resolve_need, forget, or status."
+            return "Unknown action. Use: query, recall, insights, person, link, encounters, save_need, needs, resolve_need, forget, or status."
         }
     }
 
