@@ -1,10 +1,15 @@
 # Plan AW — Skill Self-Evolution (learn new skills from failed turns, with human review)
 
-**Status:** 📋 Planned (not built). The largest of these four plans and the most
-safety-sensitive. **Agent-Mode-gated** and **human-in-the-loop by design** — the loop *proposes*
-skills, the user *approves* them; nothing self-authored is injected into the always-on assistant
-unreviewed. The trigger, dedup, and proposal-validation are pure and headless-testable; the LLM
-analysis + review UI are the live edge. No new SPM dependency.
+**Status: 🚧 Spine shipped (this PR).** The deterministic loop is built: `FailureSample` +
+`SkillEvolutionPrompt`, pure `EvolutionTrigger` (accumulation **or** burst-rate) + `SkillDeduplicator`
+(name Jaccard + body overlap) + `SkillProposal.validate` (slug rules, required fields, length caps,
+auto `dyn-N`), the `EvolvedSkillStore` (SQLite pending/approved/dismissed lifecycle, "never re-propose"
+by name), and `SkillEvolutionService` (Agent-Mode-gated `record` → `evolveIfNeeded` over a
+`SkillEvolutionAnalyzer` seam; `approve` routes to a `VoiceSkill`). 17 tests. **Agent-Mode-gated** and
+**human-in-the-loop by design** — the loop *proposes*, the user *approves*; nothing self-authored is
+injected unreviewed. **Deferred (live edge):** the capture hooks that feed `record()` from real
+tool-errors/corrections (touches `AgentRunner`/`AppState`) and the Suggested-Skills review UI. The
+embedding-based **skill retrieval companion** already shipped ([#127](https://github.com/straff2002/OpenGlasses/pull/127)/[#129](https://github.com/straff2002/OpenGlasses/pull/129)).
 
 ## The problem
 OpenGlasses' skills are **static**: `InstalledSkillStore`, `VoiceSkillStore`, OpenClaw skills, and the
