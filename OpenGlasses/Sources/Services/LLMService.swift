@@ -1034,16 +1034,19 @@ class LLMService: ObservableObject {
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.timeoutInterval = 30
-                // `responseMimeType` enforces a JSON object; the exact shape is conveyed by the schema's
-                // system prompt. (Translating a generic JSON Schema to Gemini `responseSchema` is a
-                // future refinement — the parser already handles a `functionCall` channel if added.)
+                // `responseMimeType` + a translated `responseSchema` enforce the exact JSON shape
+                // (not just "some JSON") — the Gemini equivalent of Anthropic/OpenAI forced tool-use.
                 let body: [String: Any] = [
                     "system_instruction": ["parts": [["text": systemPrompt]]],
                     "contents": [["role": "user", "parts": [
                         ["text": userText],
                         ["inlineData": ["mimeType": "image/jpeg", "data": base64]]
                     ]]],
-                    "generationConfig": ["maxOutputTokens": maxTokens, "responseMimeType": "application/json"]
+                    "generationConfig": [
+                        "maxOutputTokens": maxTokens,
+                        "responseMimeType": "application/json",
+                        "responseSchema": GeminiSchemaTranslator.translate(jsonSchema)
+                    ]
                 ]
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
                 let (data, response) = try await URLSession.shared.data(for: request)
@@ -1128,7 +1131,11 @@ class LLMService: ObservableObject {
                 let body: [String: Any] = [
                     "system_instruction": ["parts": [["text": systemPrompt]]],
                     "contents": [["role": "user", "parts": [["text": userText]]]],
-                    "generationConfig": ["maxOutputTokens": maxTokens, "responseMimeType": "application/json"]
+                    "generationConfig": [
+                        "maxOutputTokens": maxTokens,
+                        "responseMimeType": "application/json",
+                        "responseSchema": GeminiSchemaTranslator.translate(jsonSchema)
+                    ]
                 ]
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
                 let (data, response) = try await URLSession.shared.data(for: request)
