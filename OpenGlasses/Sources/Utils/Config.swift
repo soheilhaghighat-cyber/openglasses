@@ -2457,10 +2457,13 @@ struct Config {
 
     /// When `true`, the skill stores inject only the skills relevant to the current turn (exact
     /// trigger matches + top-K by embedding similarity) instead of dumping the whole library.
-    /// Default **off** — dump-all is the current behaviour and is fine for a small library; retrieval
-    /// only earns its keep once the bank grows (e.g. via Skill Self-Evolution). See [[SkillRetriever]].
+    /// **Default on** (beta) — a no-op below `skillRetrievalMinCount` skills (so most users are
+    /// unaffected), and exact trigger matches are always kept; it only trims once the bank grows.
+    /// Set off to restore the unconditional dump. See [[SkillRetriever]].
     static var skillRetrievalEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "skillRetrievalEnabled")   // defaults to false
+        let key = "skillRetrievalEnabled"
+        if UserDefaults.standard.object(forKey: key) == nil { return true }
+        return UserDefaults.standard.bool(forKey: key)
     }
 
     static func setSkillRetrievalEnabled(_ enabled: Bool) {
