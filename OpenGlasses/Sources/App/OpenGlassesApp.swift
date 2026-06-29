@@ -588,6 +588,10 @@ class AppState: ObservableObject, AppStateProtocol {
 
     init() {
         // Initialize native tool system
+        // Active project namespace for document scoping (Plan AN). Bind a local ref to
+        // `userMemory` (already initialized + kept current by activePersona.didSet) so the
+        // closure resolves the live project id without capturing the half-built AppState.
+        let memoryForNamespace = userMemory
         nativeToolRegistry = NativeToolRegistry(
             locationService: locationService,
             conversationStore: conversationStore,
@@ -600,7 +604,8 @@ class AppState: ObservableObject, AppStateProtocol {
             audioRecorder: audioRecorder,
             medicalExportService: medicalExportService,
             semanticMemory: userMemory,
-            documentStore: documentStore
+            documentStore: documentStore,
+            activeNamespace: { memoryForNamespace.activePersonaId ?? "global" }
         )
         nativeToolRouter = NativeToolRouter(registry: nativeToolRegistry, openClawBridge: openClawBridge)
 
@@ -922,6 +927,13 @@ class AppState: ObservableObject, AppStateProtocol {
 
         // Visual State Memory (Plan AV) — the keyframe describe needs a vision LLM.
         VisualStateService.shared.llm = llmService
+
+        // Projects (Plan AN) — grounds the prompt in the active project's documents.
+        ProjectContextService.shared.configure(
+            documentStore: documentStore,
+            activeProjectId: { [weak self] in self?.activePersona?.id },
+            activeProjectName: { [weak self] in self?.activePersona?.name }
+        )
 
         // Configure Study Mode — generates decks from documents via the text→JSON LLM call;
         // camera enables the hands-free scan → OCR source.
@@ -2465,7 +2477,7 @@ class AppState: ObservableObject, AppStateProtocol {
         // Track in conversation store
         if Config.conversationPersistenceEnabled {
             if conversationStore.activeThreadId == nil {
-                conversationStore.startThread(mode: currentMode.rawValue)
+                conversationStore.startThread(mode: currentMode.rawValue, personaId: activePersona?.id)
             }
             conversationStore.appendMessage(role: "user", content: text)
         }
@@ -2740,7 +2752,7 @@ class AppState: ObservableObject, AppStateProtocol {
         // Track in conversation store
         if Config.conversationPersistenceEnabled {
             if conversationStore.activeThreadId == nil {
-                conversationStore.startThread(mode: currentMode.rawValue)
+                conversationStore.startThread(mode: currentMode.rawValue, personaId: activePersona?.id)
             }
             conversationStore.appendMessage(role: "user", content: query, imageAttached: imageData != nil)
         }

@@ -568,6 +568,11 @@ class GeminiLiveSessionManager: ObservableObject {
             prompt += "\n\n\(visualContext)"
         }
 
+        // Inject the active project's knowledge-base grounding when it has documents (Plan AN).
+        if let projectContext = ProjectContextService.shared.promptContext() {
+            prompt += "\n\n\(projectContext)"
+        }
+
         // Security baseline: untrusted-content / prompt-injection policy (mirrors Direct Mode).
         prompt += PromptInjectionPolicy.systemPromptPolicy
 

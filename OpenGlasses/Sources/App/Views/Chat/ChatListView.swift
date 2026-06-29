@@ -5,10 +5,18 @@ import SwiftUI
 struct ChatListView: View {
     @EnvironmentObject var appState: AppState
     @State private var path: [String] = []
+    /// When on, the list shows only the active project's (Persona's) threads (Plan AN).
+    @State private var projectScoped = false
 
     private var store: ConversationStore { appState.conversationStore }
+    private var activeProjectId: String? { appState.activePersona?.id }
+    private var activeProjectName: String? { appState.activePersona?.name }
+
     private var sortedThreads: [ConversationThread] {
-        store.threads.sorted { $0.updatedAt > $1.updatedAt }
+        let base = (projectScoped && activeProjectId != nil)
+            ? store.threads(forPersona: activeProjectId)
+            : store.threads
+        return base.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     var body: some View {
@@ -24,6 +32,20 @@ struct ChatListView: View {
             }
             .navigationTitle("Chat")
             .toolbar {
+                if let activeProjectName, !store.isLocked {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Picker("Scope", selection: $projectScoped) {
+                                Text("All conversations").tag(false)
+                                Text("\(activeProjectName) only").tag(true)
+                            }
+                        } label: {
+                            Label(projectScoped ? activeProjectName : "All",
+                                  systemImage: projectScoped ? "folder.fill" : "tray.full")
+                        }
+                        .accessibilityLabel("Filter conversations by project")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: startNewChat) {
                         Image(systemName: "square.and.pencil")
@@ -82,7 +104,7 @@ struct ChatListView: View {
     }
 
     private func startNewChat() {
-        let thread = store.startThread(mode: appState.currentMode.rawValue)
+        let thread = store.startThread(mode: appState.currentMode.rawValue, personaId: activeProjectId)
         path.append(thread.id)
     }
 }

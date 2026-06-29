@@ -14,7 +14,8 @@ final class NativeToolRegistry {
          audioRecorder: AudioRecordingService? = nil,
          medicalExportService: MedicalExportService? = nil,
          semanticMemory: SemanticMemoryStore? = nil,
-         documentStore: DocumentStore? = nil) {
+         documentStore: DocumentStore? = nil,
+         activeNamespace: (() -> String)? = nil) {
         let weatherTool = WeatherTool(locationService: locationService)
         let newsTool = NewsTool()
         let dateTimeTool = DateTimeTool()
@@ -204,6 +205,7 @@ final class NativeToolRegistry {
             var ragTool = DocumentRAGTool()
             ragTool.documentStore = docStore
             ragTool.cameraService = cameraService
+            ragTool.activeNamespace = activeNamespace   // Project scoping (Plan AN)
             register(ragTool)
             // Study Mode — flashcards + quizzes over the same documents (via StudyService.shared).
             register(StudyTool())

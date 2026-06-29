@@ -134,6 +134,17 @@ final class DocumentStore: ObservableObject {
 
     func list() -> [DocumentRef] { documents }
 
+    /// Documents in a single namespace (project scope, Plan AN).
+    func list(namespace: String) -> [DocumentRef] {
+        documents.filter { $0.namespace == namespace }
+    }
+
+    /// Count of documents in a namespace — used to gate the knowledge-base tool
+    /// advertisement so we don't offer retrieval over an empty project (Plan AN).
+    func documentCount(namespace: String) -> Int {
+        documents.reduce(0) { $1.namespace == namespace ? $0 + 1 : $0 }
+    }
+
     /// Resolve a document by name (exact then substring, case-insensitive).
     func document(named name: String) -> DocumentRef? {
         let needle = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
