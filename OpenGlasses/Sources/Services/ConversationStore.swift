@@ -37,8 +37,11 @@ struct ConversationThread: Codable, Identifiable {
     /// LLM-generated summary of compressed messages. Prepended on session resume
     /// so the AI retains context from earlier in the conversation.
     var compressedSummary: String?
+    /// Project (Persona) this thread belongs to, or `nil` for legacy/global threads
+    /// (Plan AN). Optional so older persisted threads decode unchanged.
+    var personaId: String?
 
-    init(mode: String, title: String = "New Conversation") {
+    init(mode: String, title: String = "New Conversation", personaId: String? = nil) {
         self.id = UUID().uuidString
         self.title = title
         self.summary = nil
@@ -47,6 +50,7 @@ struct ConversationThread: Codable, Identifiable {
         self.updatedAt = Date()
         self.mode = mode
         self.compressedSummary = nil
+        self.personaId = personaId
     }
 }
 
@@ -117,15 +121,24 @@ class ConversationStore: ObservableObject {
 
     /// Start a new conversation thread.
     @discardableResult
-    func startThread(mode: String) -> ConversationThread {
-        let thread = ConversationThread(mode: mode)
+    func startThread(mode: String, personaId: String? = nil) -> ConversationThread {
+        let thread = ConversationThread(mode: mode, personaId: personaId)
         threads.insert(thread, at: 0)
         activeThreadId = thread.id
         trimOldThreads()
         save()
         persistActiveSession()
-        NSLog("[ConversationStore] Started thread %@", thread.id)
+        NSLog("[ConversationStore] Started thread %@ (project %@)", thread.id, personaId ?? "global")
         return thread
+    }
+
+    /// Threads belonging to a given project (Persona), newest-first (Plan AN).
+    /// Pass `nil` to get every thread (the "All" view). A non-nil id matches only
+    /// threads explicitly tagged with it — legacy/global threads (`personaId == nil`)
+    /// are excluded from a specific project's list.
+    func threads(forPersona personaId: String?) -> [ConversationThread] {
+        guard let personaId else { return threads }
+        return threads.filter { $0.personaId == personaId }
     }
 
     /// Append a message to the active thread.

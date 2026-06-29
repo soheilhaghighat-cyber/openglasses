@@ -6,6 +6,7 @@ struct PersonasView: View {
     @State private var personas: [Persona] = Config.savedPersonas
     @State private var editingPersona: Persona? = nil
     @State private var showAddSheet = false
+    @State private var projectForDetail: Persona? = nil   // Plan AN — project detail surface
 
     var body: some View {
         List {
@@ -66,6 +67,14 @@ struct PersonasView: View {
                             }
                         }
                     }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            projectForDetail = persona
+                        } label: {
+                            Label("Project", systemImage: "folder")
+                        }
+                        .tint(AppAccent.aiCoral)
+                    }
                 }
             } header: {
                 Text("Personas")
@@ -95,6 +104,16 @@ struct PersonasView: View {
                     personas[idx] = updated
                     Config.setSavedPersonas(personas)
                 }
+            }
+        }
+        .sheet(item: $projectForDetail) { persona in
+            NavigationStack {
+                ProjectDetailView(project: persona)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { projectForDetail = nil }
+                        }
+                    }
             }
         }
     }

@@ -418,6 +418,10 @@ class LLMService: ObservableObject {
         if let vaultContext = FieldSessionService.shared.promptContext() {
             prompt += "\n\n\(vaultContext)"
         }
+        // Inject the active project's knowledge-base grounding when it has documents (Plan AN).
+        if let projectContext = ProjectContextService.shared.promptContext() {
+            prompt += "\n\n\(projectContext)"
+        }
         // Inject project-scoped notes for the active job (what the user is mid-way through).
         if Config.projectMemoryEnabled,
            let session = FieldSessionService.shared.activeSession, session.isActive {

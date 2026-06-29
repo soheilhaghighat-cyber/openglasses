@@ -1,6 +1,13 @@
 # Plan AN — Projects (scoped persona + documents + conversations)
 
-**Status: 📋 Planned.**
+**Status: 🚧 Core shipped.** Documents scope to the active project namespace (`DocumentRAGTool` +
+`DocumentStore.list/documentCount(namespace:)`); conversations carry `personaId` on
+`ConversationThread` (legacy threads decode to `nil`) with `threads(forPersona:)` + a Chat-tab project
+filter; the active project's knowledge base is grounded into both prompt builders via the pure
+`ProjectScope.knowledgeHint` + `ProjectContextService` (only advertised when the project has ≥1 doc);
+and `ProjectDetailView` shows a project's prompt + scoped documents + scoped conversations. 8 tests
+green in Release. No new SPM packages. Deferred: the optional shareable project export/import bundle
+(item 5).
 
 **Builds on:** the [`Persona`](../../OpenGlasses/Sources/Utils/Config.swift) system (Config + [`PersonasView`](../../OpenGlasses/Sources/App/Views/PersonasView.swift) + [`PersonaPickerSheet`](../../OpenGlasses/Sources/App/Views/PersonaPickerSheet.swift)), the [`DocumentStore`](../../OpenGlasses/Sources/Services/RAG/DocumentStore.swift) `namespace` column (Plan [O](O-document-rag.md)), and [`ConversationStore`](../../OpenGlasses/Sources/Services/ConversationStore.swift) threads.
 
