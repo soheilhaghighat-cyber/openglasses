@@ -61,7 +61,7 @@ then strike it here.
 
 | Plan | Shipped core | Live edge remaining | Unblocked by |
 |---|---|---|---|
-| [N](N-remote-agent-harness.md) | Harnesses + registry + tools (48 tests) | Gateway `agent.*` + live event stream; Codex-cloud / Claude-remote adapters | Gateway implementing `agent.*` + live events; a reachable Codex/Claude endpoint |
+| [N](N-remote-agent-harness.md) | Harnesses + registry + tools + **Codex/Claude Code preset adapters** (56 tests) | Gateway `agent.*` + live event stream; **live endpoint verification** of the Codex/Claude REST contracts (adapters + presets built) | Gateway implementing `agent.*` + live events; the real Codex/Claude endpoints to confirm paths against |
 | [AR](gateway-device-pairing.md) | `SetupCode`/`GatewayAuthSelector`/`PairingResponseInterpreter` + UI (23 tests) | Live approval round-trip (bootstrap → approve → per-device token) | Gateway implementing the v3 pairing handshake (shared-token today) |
 | [T](T-offline-field-queue-and-sync.md) | `OfflineQueue` + `Reachability` + `SyncEngine` + `ConflictResolver` (13 tests) | A real **networked** sync sink (today's is local/export-only) | An endpoint that accepts queued op uploads |
 | [AQ](speaker-diarization.md) | Batch path + parser (24 tests) | Live diarized caption **WebSocket** stream | Deepgram live streaming (cloud) |
