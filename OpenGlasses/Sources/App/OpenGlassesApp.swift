@@ -2185,7 +2185,20 @@ class AppState: ObservableObject, AppStateProtocol {
             return try await self.openClawBridge.agentRequest(method: method, params: params)
         })
         let custom = CustomAgentHarness(config: Config.customAgentHarness ?? CustomHarnessConfig())
-        return AgentHarnessRegistry([openClaw, custom])
+
+        // Codex / Claude Code remote (Plan N Phase 3) — preset-backed HTTP harnesses, ready when a token is set.
+        let codex = CustomAgentHarness(
+            kind: .codexCloud,
+            config: AgentHarnessPreset.codexCloud(token: Config.codexAgentToken, baseURL: Config.codexAgentBaseURL),
+            displayName: AgentHarnessKind.codexCloud.displayName,
+            isConfigured: !Config.codexAgentToken.isEmpty)
+        let claudeCode = CustomAgentHarness(
+            kind: .claudeRemote,
+            config: AgentHarnessPreset.claudeRemote(token: Config.claudeRemoteToken, baseURL: Config.claudeRemoteBaseURL),
+            displayName: AgentHarnessKind.claudeRemote.displayName,
+            isConfigured: !Config.claudeRemoteToken.isEmpty)
+
+        return AgentHarnessRegistry([openClaw, custom, codex, claudeCode])
     }
 
     /// Re-read the Custom endpoint config into the session's registry — call after the user edits the

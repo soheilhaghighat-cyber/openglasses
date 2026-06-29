@@ -2711,6 +2711,40 @@ struct Config {
         }
     }
 
+    // MARK: - Codex / Claude Code remote harnesses (Plan N, Phase 3)
+
+    /// OpenAI Codex cloud API token (Keychain — secret). Empty ⇒ harness not configured.
+    static var codexAgentToken: String {
+        KeychainService.string(for: "codexAgentToken") ?? ""
+    }
+    static func setCodexAgentToken(_ token: String) {
+        if token.isEmpty { _ = KeychainService.delete("codexAgentToken") }
+        else { _ = KeychainService.setString(token, for: "codexAgentToken") }
+    }
+    /// Optional base-URL override for the Codex endpoint (non-secret). Blank ⇒ preset default.
+    static var codexAgentBaseURL: String {
+        UserDefaults.standard.string(forKey: "codexAgentBaseURL") ?? ""
+    }
+    static func setCodexAgentBaseURL(_ url: String) {
+        UserDefaults.standard.set(url, forKey: "codexAgentBaseURL")
+    }
+
+    /// Claude Code remote API token (Keychain — secret). Empty ⇒ harness not configured.
+    static var claudeRemoteToken: String {
+        KeychainService.string(for: "claudeRemoteToken") ?? ""
+    }
+    static func setClaudeRemoteToken(_ token: String) {
+        if token.isEmpty { _ = KeychainService.delete("claudeRemoteToken") }
+        else { _ = KeychainService.setString(token, for: "claudeRemoteToken") }
+    }
+    /// Optional base-URL override for the Claude Code endpoint (non-secret). Blank ⇒ preset default.
+    static var claudeRemoteBaseURL: String {
+        UserDefaults.standard.string(forKey: "claudeRemoteBaseURL") ?? ""
+    }
+    static func setClaudeRemoteBaseURL(_ url: String) {
+        UserDefaults.standard.set(url, forKey: "claudeRemoteBaseURL")
+    }
+
     // MARK: - Field Assist (B2B)
 
     /// Developer-only: run the local MCP glasses HTTP server (Plan E). Only effective when
