@@ -584,6 +584,18 @@ struct SettingsView: View {
                 } label: {
                     Label("Live Vision", systemImage: "camera.metering.matrix")
                 }
+
+                NavigationLink {
+                    DocumentsView()
+                } label: {
+                    Label("Documents", systemImage: "doc.text.magnifyingglass")
+                }
+
+                NavigationLink {
+                    CaptureFlowAuthorView()
+                } label: {
+                    Label("Author Capture-Flow", systemImage: "list.bullet.rectangle")
+                }
             } header: {
                 Text("Advanced")
             } footer: {
