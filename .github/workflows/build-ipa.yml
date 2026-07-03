@@ -16,7 +16,7 @@ jobs:
           brew install xcodegen
           pip3 install pyyaml --break-system-packages
 
-      - name: Deep Clean Watch & Widgets from Targets and Schemes
+      - name: Deep Clean Watch, Widgets & Entitlements
         run: |
           cat << 'EOF' > fix_yaml.py
           import yaml
@@ -29,12 +29,14 @@ jobs:
               for t in targets_to_remove:
                   data['targets'].pop(t, None)
               for t_name, t_data in data['targets'].items():
-                  if isinstance(t_data, dict) and 'dependencies' in t_data:
-                      t_data['dependencies'] = [
-                          d for d in t_data['dependencies'] 
-                          if not (isinstance(d, dict) and d.get('target') in targets_to_remove)
-                          and not (isinstance(d, str) and d in targets_to_remove)
-                      ]
+                  if isinstance(t_data, dict):
+                      if 'dependencies' in t_data:
+                          t_data['dependencies'] = [
+                              d for d in t_data['dependencies'] 
+                              if not (isinstance(d, dict) and d.get('target') in targets_to_remove)
+                              and not (isinstance(d, str) and d in targets_to_remove)
+                          ]
+                      t_data.pop('entitlements', None)
                       
           if 'schemes' in data:
               for s_name, s_data in data['schemes'].items():
@@ -60,26 +62,39 @@ jobs:
 
       - name: Build the app (Unsigned)
         run: |
-          xcodebuild clean archive \
+          set -o pipefail
+          xcodebuild clean build \
             -project OpenGlasses.xcodeproj \
             -scheme OpenGlasses \
             -configuration Release \
+            -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -archivePath unsigned.xcarchive \
             -skipMacroValidation \
             -skipPackagePluginValidation \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            DSTROOT=$PWD/build \
+            OBJROOT=$PWD/build \
+            SYMROOT=$PWD/build 2>&1 | tee full_build_log.txt | xcpretty
 
       - name: Package into IPA
+        if: success()
         run: |
           mkdir -p Payload
-          mv unsigned.xcarchive/Products/Applications/*.app Payload/
+          mv build/Release-iphoneos/OpenGlasses.app Payload/
           zip -r OpenGlasses.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload Artifact (IPA)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: OpenGlasses-IPA
           path: OpenGlasses.ipa
+
+      - name: Upload Error Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Error-Log
+          path: full_build_log.txt
