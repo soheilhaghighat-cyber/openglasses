@@ -16,23 +16,44 @@ jobs:
           brew install xcodegen
           pip3 install pyyaml --break-system-packages
 
-      - name: Remove Watch and Widget Targets (Fixes Signing Errors)
+      - name: Deep Clean Watch & Widgets from Targets and Schemes
         run: |
-          python3 -c "
+          cat << 'EOF' > fix_yaml.py
           import yaml
           with open('project.base.yml', 'r') as f:
               data = yaml.safe_load(f)
+              
           targets_to_remove = ['OpenGlassesWatch', 'OpenGlassesWatchWidget', 'OpenGlassesShareExtension', 'GlassesActivityWidget']
+          
           if 'targets' in data:
               for t in targets_to_remove:
-                  if t in data['targets']:
-                      del data['targets'][t]
-              if 'OpenGlasses' in data['targets']:
-                  deps = data['targets']['OpenGlasses'].get('dependencies', [])
-                  data['targets']['OpenGlasses']['dependencies'] = [d for d in deps if d.get('target') not in targets_to_remove]
+                  data['targets'].pop(t, None)
+              for t_name, t_data in data['targets'].items():
+                  if isinstance(t_data, dict) and 'dependencies' in t_data:
+                      t_data['dependencies'] = [
+                          d for d in t_data['dependencies'] 
+                          if not (isinstance(d, dict) and d.get('target') in targets_to_remove)
+                          and not (isinstance(d, str) and d in targets_to_remove)
+                      ]
+                      
+          if 'schemes' in data:
+              for s_name, s_data in data['schemes'].items():
+                  if isinstance(s_data, dict) and 'build' in s_data and 'targets' in s_data['build']:
+                      targets = s_data['build']['targets']
+                      if isinstance(targets, dict):
+                          for t in targets_to_remove:
+                              targets.pop(t, None)
+                      elif isinstance(targets, list):
+                          s_data['build']['targets'] = [
+                              t for t in targets 
+                              if not (isinstance(t, str) and t in targets_to_remove)
+                              and not (isinstance(t, dict) and list(t.keys())[0] in targets_to_remove)
+                          ]
+                  
           with open('project.base.yml', 'w') as f:
               yaml.dump(data, f)
-          "
+          EOF
+          python3 fix_yaml.py
 
       - name: Generate Xcode Project
         run: ./Scripts/generate-xcodeproj.sh
