@@ -11,31 +11,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install xcodegen
-        run: brew install xcodegen
+      - name: Install dependencies
+        run: |
+          brew install xcodegen
+          pip3 install pyyaml --break-system-packages
+
+      - name: Remove Watch and Widget Targets (Fixes Signing Errors)
+        run: |
+          python3 -c "
+          import yaml
+          with open('project.base.yml', 'r') as f:
+              data = yaml.safe_load(f)
+          targets_to_remove = ['OpenGlassesWatch', 'OpenGlassesWatchWidget', 'OpenGlassesShareExtension', 'GlassesActivityWidget']
+          if 'targets' in data:
+              for t in targets_to_remove:
+                  if t in data['targets']:
+                      del data['targets'][t]
+              if 'OpenGlasses' in data['targets']:
+                  deps = data['targets']['OpenGlasses'].get('dependencies', [])
+                  data['targets']['OpenGlasses']['dependencies'] = [d for d in deps if d.get('target') not in targets_to_remove]
+          with open('project.base.yml', 'w') as f:
+              yaml.dump(data, f)
+          "
 
       - name: Generate Xcode Project
         run: ./Scripts/generate-xcodeproj.sh
 
       - name: Build the app (Unsigned)
         run: |
-          xcodebuild clean build \
+          xcodebuild clean archive \
             -project OpenGlasses.xcodeproj \
             -scheme OpenGlasses \
-            -sdk iphoneos \
             -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath unsigned.xcarchive \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM="" \
-            DSTROOT=$PWD/build \
-            OBJROOT=$PWD/build \
-            SYMROOT=$PWD/build
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Package into IPA
         run: |
           mkdir -p Payload
-          mv build/Release-iphoneos/OpenGlasses.app Payload/
+          mv unsigned.xcarchive/Products/Applications/*.app Payload/
           zip -r OpenGlasses.ipa Payload
 
       - name: Upload Artifact
