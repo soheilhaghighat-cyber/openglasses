@@ -11,6 +11,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Force Stable Xcode (Fixes HaishinKit SDK Errors)
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer || \
+          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || \
+          sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
+
       - name: Install dependencies
         run: |
           brew install xcodegen
@@ -62,27 +68,23 @@ jobs:
 
       - name: Build the app (Unsigned)
         run: |
-          set -o pipefail
-          xcodebuild clean build \
+          xcodebuild clean archive \
             -project OpenGlasses.xcodeproj \
             -scheme OpenGlasses \
             -configuration Release \
-            -sdk iphoneos \
             -destination 'generic/platform=iOS' \
+            -archivePath unsigned.xcarchive \
             -skipMacroValidation \
             -skipPackagePluginValidation \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            DSTROOT=$PWD/build \
-            OBJROOT=$PWD/build \
-            SYMROOT=$PWD/build 2>&1 | tee full_build_log.txt | xcpretty
+            CODE_SIGNING_ALLOWED=NO 
 
       - name: Package into IPA
         if: success()
         run: |
           mkdir -p Payload
-          mv build/Release-iphoneos/OpenGlasses.app Payload/
+          mv unsigned.xcarchive/Products/Applications/*.app Payload/
           zip -r OpenGlasses.ipa Payload
 
       - name: Upload Artifact (IPA)
@@ -91,10 +93,3 @@ jobs:
         with:
           name: OpenGlasses-IPA
           path: OpenGlasses.ipa
-
-      - name: Upload Error Log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Error-Log
-          path: full_build_log.txt
