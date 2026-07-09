@@ -1,17 +1,25 @@
 name: Build unsigned IPA
 
 on:
-  workflow_dispatch:   # اجرای دستی از تب Actions
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest   # مکِ مجازی رایگان گیت‌هاب
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Select latest Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.app || sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+      - name: Show repo contents (debug)
+        run: ls -la && find . -maxdepth 2 -name "*.xcodeproj" -o -maxdepth 2 -name "*.xcworkspace" -o -maxdepth 2 -name "project.yml" -o -maxdepth 2 -name "Package.swift"
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: List schemes (debug)
+        run: xcodebuild -list -project OpenGlasses.xcodeproj
 
       - name: Build archive (no signing)
         run: |
@@ -29,7 +37,7 @@ jobs:
       - name: Package .ipa
         run: |
           mkdir -p Payload
-          cp -r build/OpenGlasses.xcarchive/Products/Applications/OpenGlasses.app Payload/
+          cp -r build/OpenGlasses.xcarchive/Products/Applications/*.app Payload/
           zip -r OpenGlasses-unsigned.ipa Payload
 
       - name: Upload IPA
