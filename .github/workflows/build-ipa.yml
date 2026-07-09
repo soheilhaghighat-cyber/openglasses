@@ -1,51 +1,39 @@
-name: Build OpenGlasses iOS App
+name: Build unsigned IPA
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # اجرای دستی از تب Actions
 
 jobs:
-  build_ios:
-    name: Build and Export Unsigned IPA
-    runs-on: macos-14
-
+  build:
+    runs-on: macos-latest   # مکِ مجازی رایگان گیت‌هاب
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Setup Xcode Environment
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: 'latest-stable'
+      - name: Select latest Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.app || sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)
 
-      - name: Install xcodegen via Homebrew
-        run: brew install xcodegen
-
-      - name: Generate Xcode Project structure
+      - name: Build archive (no signing)
         run: |
-          chmod +x./Scripts/generate-xcodeproj.sh
-         ./Scripts/generate-xcodeproj.sh
-
-      - name: Build and Archive (Bypassing Code Sign)
-        run: |
-          xcodebuild clean archive \
+          xcodebuild archive \
             -project OpenGlasses.xcodeproj \
             -scheme OpenGlasses \
             -configuration Release \
-            -sdk iphoneos \
-            -archivePath $RUNNER_TEMP/OpenGlasses.xcarchive \
-            CODE_SIGNING_REQUIRED=NO \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/OpenGlasses.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
 
-      - name: Extract and Package IPA Payload
+      - name: Package .ipa
         run: |
           mkdir -p Payload
-          mv $RUNNER_TEMP/OpenGlasses.xcarchive/Products/Applications/OpenGlasses.app Payload/
-          zip -r -9 OpenGlasses.ipa Payload/
+          cp -r build/OpenGlasses.xcarchive/Products/Applications/OpenGlasses.app Payload/
+          zip -r OpenGlasses-unsigned.ipa Payload
 
-      - name: Upload IPA Artifact to Cloud
-        uses: actions/upload-artifact@v3
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
         with:
-          name: OpenGlasses-Artifact
-          path: OpenGlasses.ipa
-          retention-days: 7
+          name: OpenGlasses-IPA
+          path: OpenGlasses-unsigned.ipa
