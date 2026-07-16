@@ -123,28 +123,25 @@ jobs:
           python3 - << 'PY'
           import jwt, time, os, urllib.request, sys
           kid, iss = os.environ['KID'].strip(), os.environ['ISS'].strip()
-          print("KID length:", len(kid), "(should be 10)")
-          print("ISSUER length:", len(iss), "(should be 36)")
-          print("ISSUER looks like UUID:", iss.count('-') == 4)
           key = open(os.path.expanduser("~/private_keys/AuthKey_%s.p8" % kid)).read()
           now = int(time.time())
-          variants = {
-            "TEAM key (iss)":       {"iss": iss, "iat": now, "exp": now+600, "aud": "appstoreconnect-v1"},
-            "INDIVIDUAL key (sub)": {"sub": "user", "iat": now, "exp": now+600, "aud": "appstoreconnect-v1"},
-          }
-          ok = False
-          for name, payload in variants.items():
-              tok = jwt.encode(payload, key, algorithm="ES256", headers={"kid": kid})
-              req = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/apps?limit=1",
+          tok = jwt.encode({"iss": iss, "iat": now, "exp": now+600,
+                            "aud": "appstoreconnect-v1"}, key,
+                           algorithm="ES256", headers={"kid": kid})
+          base = "https://api.appstoreconnect.apple.com/v1/"
+          results = {}
+          for ep in ["apps", "certificates", "bundleIds", "profiles", "devices"]:
+              req = urllib.request.Request(base + ep + "?limit=1",
                                            headers={"Authorization": "Bearer " + tok})
               try:
                   urllib.request.urlopen(req)
-                  print("OK -", name, "-> 200 WORKS")
-                  ok = True
+                  print("OK   ", ep)
+                  results[ep] = True
               except Exception as e:
-                  print("FAIL -", name, "->", getattr(e, 'code', e))
-          if not ok:
-              sys.exit("Both variants rejected — key content, Key ID, or Issuer ID is wrong.")
+                  print("FAIL ", ep, "->", getattr(e, 'code', e))
+                  results[ep] = False
+          if not results.get("profiles") or not results.get("certificates"):
+              sys.exit("Key lacks Certificates/Profiles access — create a TEAM key with Admin role.")
           PY
 
       - name: Archive
