@@ -90,9 +90,22 @@ jobs:
           OPENGLASSES_SKIP_WATCH=1 OPENGLASSES_SKIP_TESTS=1 ./Scripts/generate-xcodeproj.sh
 
       - name: Install API key
+        env:
+          KEY: ${{ secrets.ASC_API_KEY }}
+          KID: ${{ secrets.ASC_KEY_ID }}
         run: |
           mkdir -p "$HOME/private_keys"
-          echo "${{ secrets.ASC_API_KEY }}" > "$HOME/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
+          python3 - << 'PY'
+          import os, re, urllib.parse
+          raw = urllib.parse.unquote(os.environ['KEY'])
+          body = re.sub(r'-----(BEGIN|END) PRIVATE KEY-----', '', raw)
+          body = re.sub(r'\s+', '', body)
+          lines = [body[i:i+64] for i in range(0, len(body), 64)]
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
+          path = os.path.expanduser("~/private_keys/AuthKey_%s.p8" % os.environ['KID'])
+          open(path, "w").write(pem)
+          print("key written, body length:", len(body))
+          PY
 
       - name: Archive
         run: |
