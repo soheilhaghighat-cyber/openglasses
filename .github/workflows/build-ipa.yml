@@ -24,7 +24,7 @@ jobs:
           ISS: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           python3 - << 'PY'
-          import os, re, base64, json, sys, urllib.parse
+          import os, re, base64, json, urllib.parse
           raw = os.environ['KEY']
           if '%' in raw: raw = urllib.parse.unquote(raw)
           m = re.search(r'BEGIN[^-]*KEY-----(.*?)-----END', raw, re.S)
@@ -38,6 +38,18 @@ jobs:
                     open("asc_key.json", "w"))
           print("API key JSON ready")
           PY
+
+      - name: Patch project spec (app group + remove CarPlay)
+        run: |
+          grep -rl "group.com.openglasses.app" \
+            --include="*.swift" --include="*.plist" --include="*.yml" \
+            --include="*.entitlements" --exclude-dir=.git . | while read -r f; do
+            sed -i '' "s|group\.com\.openglasses\.app|${APP_GROUP}|g" "$f"
+            echo "patched: $f"
+          done
+          sed -i '' '/carplay-voice-based-conversation/d' project.base.yml
+          echo "--- entitlement keys now in project.base.yml:"
+          grep -n "com.apple" project.base.yml || true
 
       - name: Create keychain
         run: |
@@ -60,44 +72,11 @@ jobs:
               api_key_path:asc_key.json \
               app_identifier:"$id" \
               provisioning_name:"CI AppStore $id" \
-              output_path:./profiles
+              output_path:./profiles \
+              force:true
           done
           cp ./profiles/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/ || true
           security find-identity -v -p codesigning build.keychain
-
-      - name: Write personal entitlements
-        run: |
-          mkdir -p Config/Entitlements/Personal
-          cat > Config/Entitlements/Personal/OpenGlasses.entitlements << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>com.apple.developer.homekit</key><true/>
-            <key>com.apple.developer.kernel.increased-memory-limit</key><true/>
-            <key>com.apple.security.application-groups</key>
-            <array><string>${APP_GROUP}</string></array>
-          </dict>
-          </plist>
-          EOF
-          for t in GlassesActivityWidget OpenGlassesShareExtension; do
-          cat > Config/Entitlements/Personal/$t.entitlements << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>com.apple.security.application-groups</key>
-            <array><string>${APP_GROUP}</string></array>
-          </dict>
-          </plist>
-          EOF
-          done
-
-      - name: Rewrite app group in sources
-        run: |
-          grep -rl "group.com.openglasses.app" --include="*.swift" --include="*.plist" . | while read -r f; do
-            sed -i '' "s|group\.com\.openglasses\.app|${APP_GROUP}|g" "$f"
-          done
 
       - name: Write project.local.yml
         run: |
@@ -110,7 +89,6 @@ jobs:
                 base:
                   DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}
-                  CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/OpenGlasses.entitlements
                   CODE_SIGN_STYLE: Manual
                   CODE_SIGN_IDENTITY: "Apple Distribution"
                   PROVISIONING_PROFILE_SPECIFIER: "CI AppStore ${BUNDLE_PREFIX}"
@@ -120,7 +98,6 @@ jobs:
                 base:
                   DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}.GlassesActivityWidget
-                  CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/GlassesActivityWidget.entitlements
                   CODE_SIGN_STYLE: Manual
                   CODE_SIGN_IDENTITY: "Apple Distribution"
                   PROVISIONING_PROFILE_SPECIFIER: "CI AppStore ${BUNDLE_PREFIX}.GlassesActivityWidget"
@@ -130,7 +107,6 @@ jobs:
                 base:
                   DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}.ShareExtension
-                  CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/OpenGlassesShareExtension.entitlements
                   CODE_SIGN_STYLE: Manual
                   CODE_SIGN_IDENTITY: "Apple Distribution"
                   PROVISIONING_PROFILE_SPECIFIER: "CI AppStore ${BUNDLE_PREFIX}.ShareExtension"
@@ -143,6 +119,9 @@ jobs:
           brew install xcodegen
           chmod +x ./Scripts/generate-xcodeproj.sh || true
           OPENGLASSES_SKIP_WATCH=1 OPENGLASSES_SKIP_TESTS=1 ./Scripts/generate-xcodeproj.sh
+          echo "--- generated entitlements:"
+          find . -name "*.entitlements" -not -path "./.git/*" | while read -r f; do
+            echo "== $f"; cat "$f"; done
 
       - name: Archive
         run: |
