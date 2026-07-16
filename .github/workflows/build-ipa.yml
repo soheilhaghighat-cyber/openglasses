@@ -89,23 +89,30 @@ jobs:
           chmod +x ./Scripts/generate-xcodeproj.sh || true
           OPENGLASSES_SKIP_WATCH=1 OPENGLASSES_SKIP_TESTS=1 ./Scripts/generate-xcodeproj.sh
 
-      - name: Install API key
+      - name: Install and verify API key
         env:
           KEY: ${{ secrets.ASC_API_KEY }}
           KID: ${{ secrets.ASC_KEY_ID }}
         run: |
           mkdir -p "$HOME/private_keys"
           python3 - << 'PY'
-          import os, re, urllib.parse
-          raw = urllib.parse.unquote(os.environ['KEY'])
-          body = re.sub(r'-----(BEGIN|END) PRIVATE KEY-----', '', raw)
-          body = re.sub(r'\s+', '', body)
+          import os, re, base64, sys, urllib.parse
+          raw = os.environ['KEY']
+          if '%' in raw:
+              raw = urllib.parse.unquote(raw)
+          m = re.search(r'BEGIN[^-]*KEY-----(.*?)-----END', raw, re.S)
+          body = m.group(1) if m else raw
+          body = re.sub(r'[^A-Za-z0-9+/=]', '', body)
+          try:
+              base64.b64decode(body, validate=True)
+          except Exception as e:
+              sys.exit("ASC_API_KEY secret is not a valid key: %s" % e)
           lines = [body[i:i+64] for i in range(0, len(body), 64)]
           pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
-          path = os.path.expanduser("~/private_keys/AuthKey_%s.p8" % os.environ['KID'])
-          open(path, "w").write(pem)
-          print("key written, body length:", len(body))
+          open(os.path.expanduser("~/private_keys/AuthKey_%s.p8" % os.environ['KID']), "w").write(pem)
+          print("key body length:", len(body))
           PY
+          openssl pkey -in "$HOME/private_keys/AuthKey_${KID}.p8" -noout && echo "KEY OK"
 
       - name: Archive
         run: |
