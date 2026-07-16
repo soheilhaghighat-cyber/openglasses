@@ -114,6 +114,31 @@ jobs:
           PY
           openssl pkey -in "$HOME/private_keys/AuthKey_${KID}.p8" -noout && echo "KEY OK"
 
+      - name: Test Apple credentials
+        env:
+          KID: ${{ secrets.ASC_KEY_ID }}
+          ISS: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          pip3 install pyjwt cryptography --quiet --break-system-packages 2>/dev/null || pip3 install pyjwt cryptography --quiet
+          TOKEN=$(python3 - << 'PY'
+          import jwt, time, os
+          key = open(os.path.expanduser("~/private_keys/AuthKey_%s.p8" % os.environ['KID'])).read()
+          print(jwt.encode({"iss": os.environ['ISS'], "iat": int(time.time()),
+                            "exp": int(time.time())+600, "aud": "appstoreconnect-v1"},
+                           key, algorithm="ES256", headers={"kid": os.environ['KID']}))
+          PY
+          )
+          CODE=$(curl -s -o /tmp/r.json -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
+            "https://api.appstoreconnect.apple.com/v1/apps?limit=1")
+          echo "HTTP $CODE"
+          if [ "$CODE" = "200" ]; then
+            echo "CREDENTIALS OK"
+          else
+            echo "CREDENTIALS REJECTED — check ASC_KEY_ID / ASC_ISSUER_ID / ASC_API_KEY"
+            cat /tmp/r.json
+            exit 1
+          fi
+
       - name: Archive
         run: |
           xcodebuild archive \
