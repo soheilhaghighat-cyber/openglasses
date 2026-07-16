@@ -15,15 +15,55 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select newest Xcode
-        run: |
-          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
-          xcodebuild -version
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
 
-      - name: Rewrite app group in sources
+      - name: Build API key files
+        env:
+          KEY: ${{ secrets.ASC_API_KEY }}
+          KID: ${{ secrets.ASC_KEY_ID }}
+          ISS: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          grep -rl "group.com.openglasses.app" --include="*.swift" --include="*.plist" . | while read -r f; do
-            sed -i '' "s|group\.com\.openglasses\.app|${APP_GROUP}|g" "$f"
+          python3 - << 'PY'
+          import os, re, base64, json, sys, urllib.parse
+          raw = os.environ['KEY']
+          if '%' in raw: raw = urllib.parse.unquote(raw)
+          m = re.search(r'BEGIN[^-]*KEY-----(.*?)-----END', raw, re.S)
+          body = re.sub(r'[^A-Za-z0-9+/=]', '', m.group(1) if m else raw)
+          base64.b64decode(body, validate=True)
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(
+                body[i:i+64] for i in range(0, len(body), 64)) + "\n-----END PRIVATE KEY-----\n"
+          json.dump({"key_id": os.environ['KID'].strip(),
+                     "issuer_id": os.environ['ISS'].strip(),
+                     "key": pem, "duration": 1200, "in_house": False},
+                    open("asc_key.json", "w"))
+          print("API key JSON ready")
+          PY
+
+      - name: Create keychain
+        run: |
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+      - name: Create certificate and profiles
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          fastlane run get_certificates \
+            api_key_path:asc_key.json \
+            development:false \
+            keychain_path:"$HOME/Library/Keychains/build.keychain-db" \
+            keychain_password:ci \
+            output_path:./certs
+          for id in "${BUNDLE_PREFIX}" "${BUNDLE_PREFIX}.GlassesActivityWidget" "${BUNDLE_PREFIX}.ShareExtension"; do
+            fastlane run get_provisioning_profile \
+              api_key_path:asc_key.json \
+              app_identifier:"$id" \
+              provisioning_name:"CI AppStore $id" \
+              output_path:./profiles
           done
+          cp ./profiles/*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/ || true
+          security find-identity -v -p codesigning build.keychain
 
       - name: Write personal entitlements
         run: |
@@ -53,6 +93,12 @@ jobs:
           EOF
           done
 
+      - name: Rewrite app group in sources
+        run: |
+          grep -rl "group.com.openglasses.app" --include="*.swift" --include="*.plist" . | while read -r f; do
+            sed -i '' "s|group\.com\.openglasses\.app|${APP_GROUP}|g" "$f"
+          done
+
       - name: Write project.local.yml
         run: |
           cat > project.local.yml << EOF
@@ -65,6 +111,9 @@ jobs:
                   DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}
                   CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/OpenGlasses.entitlements
+                  CODE_SIGN_STYLE: Manual
+                  CODE_SIGN_IDENTITY: "Apple Distribution"
+                  PROVISIONING_PROFILE_SPECIFIER: "CI AppStore ${BUNDLE_PREFIX}"
                   CURRENT_PROJECT_VERSION: "${{ github.run_number }}"
             GlassesActivityWidget:
               settings:
@@ -72,6 +121,9 @@ jobs:
                   DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}.GlassesActivityWidget
                   CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/GlassesActivityWidget.entitlements
+                  CODE_SIGN_STYLE: Manual
+                  CODE_SIGN_IDENTITY: "Apple Distribution"
+                  PROVISIONING_PROFILE_SPECIFIER: "CI AppStore ${BUNDLE_PREFIX}.GlassesActivityWidget"
                   CURRENT_PROJECT_VERSION: "${{ github.run_number }}"
             OpenGlassesShareExtension:
               settings:
@@ -79,6 +131,9 @@ jobs:
                   DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}.ShareExtension
                   CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/OpenGlassesShareExtension.entitlements
+                  CODE_SIGN_STYLE: Manual
+                  CODE_SIGN_IDENTITY: "Apple Distribution"
+                  PROVISIONING_PROFILE_SPECIFIER: "CI AppStore ${BUNDLE_PREFIX}.ShareExtension"
                   CURRENT_PROJECT_VERSION: "${{ github.run_number }}"
           EOF
           cat project.local.yml
@@ -89,61 +144,6 @@ jobs:
           chmod +x ./Scripts/generate-xcodeproj.sh || true
           OPENGLASSES_SKIP_WATCH=1 OPENGLASSES_SKIP_TESTS=1 ./Scripts/generate-xcodeproj.sh
 
-      - name: Install and verify API key
-        env:
-          KEY: ${{ secrets.ASC_API_KEY }}
-          KID: ${{ secrets.ASC_KEY_ID }}
-        run: |
-          mkdir -p "$HOME/private_keys"
-          python3 - << 'PY'
-          import os, re, base64, sys, urllib.parse
-          raw = os.environ['KEY']
-          if '%' in raw:
-              raw = urllib.parse.unquote(raw)
-          m = re.search(r'BEGIN[^-]*KEY-----(.*?)-----END', raw, re.S)
-          body = m.group(1) if m else raw
-          body = re.sub(r'[^A-Za-z0-9+/=]', '', body)
-          try:
-              base64.b64decode(body, validate=True)
-          except Exception as e:
-              sys.exit("ASC_API_KEY secret is not a valid key: %s" % e)
-          lines = [body[i:i+64] for i in range(0, len(body), 64)]
-          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\n"
-          open(os.path.expanduser("~/private_keys/AuthKey_%s.p8" % os.environ['KID'].strip()), "w").write(pem)
-          print("key body length:", len(body))
-          PY
-          openssl pkey -in "$HOME/private_keys/AuthKey_${KID}.p8" -noout && echo "KEY OK"
-
-      - name: Test Apple credentials
-        env:
-          KID: ${{ secrets.ASC_KEY_ID }}
-          ISS: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          pip3 install pyjwt cryptography --quiet --break-system-packages 2>/dev/null || pip3 install pyjwt cryptography --quiet
-          python3 - << 'PY'
-          import jwt, time, os, urllib.request, sys
-          kid, iss = os.environ['KID'].strip(), os.environ['ISS'].strip()
-          key = open(os.path.expanduser("~/private_keys/AuthKey_%s.p8" % kid)).read()
-          now = int(time.time())
-          tok = jwt.encode({"iss": iss, "iat": now, "exp": now+600,
-                            "aud": "appstoreconnect-v1"}, key,
-                           algorithm="ES256", headers={"kid": kid})
-          base = "https://api.appstoreconnect.apple.com/v1/"
-          results = {}
-          for ep in ["apps", "certificates", "bundleIds", "profiles", "devices"]:
-              req = urllib.request.Request(base + ep + "?limit=1",
-                                           headers={"Authorization": "Bearer " + tok})
-              try:
-                  urllib.request.urlopen(req)
-                  print("OK   ", ep)
-                  results[ep] = True
-              except Exception as e:
-                  print("FAIL ", ep, "->", getattr(e, 'code', e))
-                  results[ep] = False
-          if not results.get("profiles") or not results.get("certificates"):
-              sys.exit("Key lacks Certificates/Profiles access — create a TEAM key with Admin role.")
-          PY
-
       - name: Archive
         run: |
           xcodebuild archive \
@@ -152,14 +152,11 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath build/OpenGlasses.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$HOME/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
             -skipPackagePluginValidation \
-            -skipMacroValidation
+            -skipMacroValidation \
+            OTHER_CODE_SIGN_FLAGS="--keychain $HOME/Library/Keychains/build.keychain-db"
 
-      - name: Export and upload to TestFlight
+      - name: Export IPA
         run: |
           cat > ExportOptions.upload.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -167,9 +164,15 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
             <key>teamID</key><string>${{ secrets.ASC_TEAM_ID }}</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_PREFIX}</key><string>CI AppStore ${BUNDLE_PREFIX}</string>
+              <key>${BUNDLE_PREFIX}.GlassesActivityWidget</key><string>CI AppStore ${BUNDLE_PREFIX}.GlassesActivityWidget</string>
+              <key>${BUNDLE_PREFIX}.ShareExtension</key><string>CI AppStore ${BUNDLE_PREFIX}.ShareExtension</string>
+            </dict>
             <key>uploadSymbols</key><true/>
           </dict>
           </plist>
@@ -177,8 +180,19 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath build/OpenGlasses.xcarchive \
             -exportPath build/export \
-            -exportOptionsPlist ExportOptions.upload.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$HOME/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+            -exportOptionsPlist ExportOptions.upload.plist
+
+      - name: Upload to TestFlight
+        run: |
+          fastlane run upload_to_testflight \
+            api_key_path:asc_key.json \
+            ipa:"$(ls build/export/*.ipa)" \
+            skip_waiting_for_build_processing:true
+
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenGlasses-IPA
+          path: build/export/*.ipa
+          if-no-files-found: ignore
