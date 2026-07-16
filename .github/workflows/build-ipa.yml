@@ -1,27 +1,100 @@
-name: Build unsigned IPA
+name: TestFlight
 
 on:
   workflow_dispatch:
+
+env:
+  BUNDLE_PREFIX: com.soheil.openglasses
+  APP_GROUP: group.com.soheil.openglasses
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Rewrite app group in sources
+        run: |
+          grep -rl "group.com.openglasses.app" --include="*.swift" --include="*.plist" . | while read -r f; do
+            sed -i '' "s|group\.com\.openglasses\.app|${APP_GROUP}|g" "$f"
+          done
+
+      - name: Write personal entitlements
+        run: |
+          mkdir -p Config/Entitlements/Personal
+          cat > Config/Entitlements/Personal/OpenGlasses.entitlements << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.developer.homekit</key><true/>
+            <key>com.apple.developer.kernel.increased-memory-limit</key><true/>
+            <key>com.apple.security.application-groups</key>
+            <array><string>${APP_GROUP}</string></array>
+          </dict>
+          </plist>
+          EOF
+          for t in GlassesActivityWidget OpenGlassesShareExtension; do
+          cat > Config/Entitlements/Personal/$t.entitlements << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array><string>${APP_GROUP}</string></array>
+          </dict>
+          </plist>
+          EOF
+          done
+
+      - name: Write project.local.yml
+        run: |
+          cat > project.local.yml << EOF
+          options:
+            developmentTeam: ${{ secrets.ASC_TEAM_ID }}
+          targets:
+            OpenGlasses:
+              settings:
+                base:
+                  DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
+                  PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}
+                  CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/OpenGlasses.entitlements
+                  CURRENT_PROJECT_VERSION: "${{ github.run_number }}"
+            GlassesActivityWidget:
+              settings:
+                base:
+                  DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
+                  PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}.GlassesActivityWidget
+                  CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/GlassesActivityWidget.entitlements
+                  CURRENT_PROJECT_VERSION: "${{ github.run_number }}"
+            OpenGlassesShareExtension:
+              settings:
+                base:
+                  DEVELOPMENT_TEAM: ${{ secrets.ASC_TEAM_ID }}
+                  PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_PREFIX}.ShareExtension
+                  CODE_SIGN_ENTITLEMENTS: Config/Entitlements/Personal/OpenGlassesShareExtension.entitlements
+                  CURRENT_PROJECT_VERSION: "${{ github.run_number }}"
+          EOF
+          cat project.local.yml
 
       - name: Generate Xcode project
         run: |
           brew install xcodegen
-          xcodegen generate
+          chmod +x ./Scripts/generate-xcodeproj.sh || true
+          OPENGLASSES_SKIP_WATCH=1 OPENGLASSES_SKIP_TESTS=1 ./Scripts/generate-xcodeproj.sh
 
-      - name: Resolve packages (trust plugins)
+      - name: Install API key
         run: |
-          xcodebuild -resolvePackageDependencies \
-            -project OpenGlasses.xcodeproj \
-            -scheme OpenGlasses
+          mkdir -p "$HOME/private_keys"
+          echo "${{ secrets.ASC_API_KEY }}" > "$HOME/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
 
-      - name: Build archive (no signing)
+      - name: Archive
         run: |
           xcodebuild archive \
             -project OpenGlasses.xcodeproj \
@@ -29,21 +102,33 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath build/OpenGlasses.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
             -skipPackagePluginValidation \
-            -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM=""
+            -skipMacroValidation
 
-      - name: Package .ipa
+      - name: Export and upload to TestFlight
         run: |
-          mkdir -p Payload
-          cp -r build/OpenGlasses.xcarchive/Products/Applications/*.app Payload/
-          zip -r OpenGlasses-unsigned.ipa Payload
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenGlasses-IPA
-          path: OpenGlasses-unsigned.ipa
+          cat > ExportOptions.upload.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${{ secrets.ASC_TEAM_ID }}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/OpenGlasses.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist ExportOptions.upload.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
