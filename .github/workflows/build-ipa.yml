@@ -54,7 +54,7 @@ jobs:
           echo "--- entitlement keys now in project.base.yml:"
           grep -n "com.apple" project.base.yml || true
 
-      - name: Create keychain (fixed path + permissions)
+      - name: Create keychain
         run: |
           KEYCHAIN_PATH="$HOME/Library/Keychains/build.keychain-db"
           security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
@@ -62,9 +62,8 @@ jobs:
           security default-keychain -s "$KEYCHAIN_PATH"
           security unlock-keychain -p ci "$KEYCHAIN_PATH"
           security set-keychain-settings -t 3600 -u "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KEYCHAIN_PATH"
 
-      - name: Create certificate and profiles (fixed + debug + both paths)
+      - name: Create certificate and profiles (fixed + debug)
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           mkdir -p ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles
@@ -85,7 +84,7 @@ jobs:
               force:true
           done
 
-          # نصب درست پروفایل‌ها (fastlane + هر دو مسیر)
+          # نصب پروفایل‌ها به هر دو مسیر
           for profile in ./profiles/*.mobileprovision; do
             if [ -f "$profile" ]; then
               echo "Installing $(basename "$profile")"
@@ -95,11 +94,14 @@ jobs:
             fi
           done
 
+          # تنظیم دسترسی کلید (بعد از import گواهی)
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$HOME/Library/Keychains/build.keychain-db"
+
           echo "=== Installed profiles (debug) ==="
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || true
           ls -la ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/ || true
 
-          echo "=== Profile names inside files ==="
+          echo "=== Profile metadata ==="
           for f in ./profiles/*.mobileprovision; do
             echo "File: $(basename "$f")"
             security cms -D -i "$f" 2>/dev/null | grep -E "Name|UUID|TeamName" || true
@@ -107,7 +109,7 @@ jobs:
 
           security find-identity -v -p codesigning build.keychain
 
-      - name: Extract Provisioning Profile UUIDs (most reliable fix)
+      - name: Extract Provisioning Profile UUIDs
         run: |
           get_uuid() {
             security cms -D -i "$1" 2>/dev/null | plutil -extract UUID raw -o - - 2>/dev/null || echo ""
@@ -126,7 +128,7 @@ jobs:
           echo "Widget: $WIDGET_UUID"
           echo "Share: $SHARE_UUID"
 
-      - name: Write project.local.yml (now uses UUID)
+      - name: Write project.local.yml (uses UUID)
         run: |
           cat > project.local.yml << EOF
           options:
@@ -168,7 +170,7 @@ jobs:
           chmod +x ./Scripts/generate-xcodeproj.sh || true
           OPENGLASSES_SKIP_WATCH=1 OPENGLASSES_SKIP_TESTS=1 ./Scripts/generate-xcodeproj.sh
 
-      - name: Archive (with explicit signing overrides)
+      - name: Archive (with explicit signing)
         run: |
           xcodebuild archive \
             -project OpenGlasses.xcodeproj \
@@ -184,7 +186,6 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain $HOME/Library/Keychains/build.keychain-db" \
             | xcpretty || true
 
-      # بقیه مراحل (Export IPA, Upload to TestFlight, artifact) دقیقاً مثل قبل هستن
       - name: Export IPA
         run: |
           cat > ExportOptions.upload.plist << EOF
