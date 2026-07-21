@@ -51,6 +51,39 @@ jobs:
           echo "remaining old group refs:"
           grep -rn "group.com.openglasses.app" --exclude-dir=.git . || echo "none"
 
+      - name: Set Meta credentials and fix URL scheme
+        env:
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_CLIENT_TOKEN: ${{ secrets.META_CLIENT_TOKEN }}
+        run: |
+          if [ -z "$META_APP_ID" ]; then echo "META_APP_ID secret missing"; exit 1; fi
+          if [ -z "$META_CLIENT_TOKEN" ]; then echo "META_CLIENT_TOKEN secret missing"; exit 1; fi
+          python3 - << 'PY'
+          import os, glob, re
+          app_id = os.environ['META_APP_ID']
+          token  = os.environ['META_CLIENT_TOKEN']
+          scheme = "openglasses"
+          targets = glob.glob("**/Info*.plist", recursive=True)
+          changed = []
+          for f in targets:
+              s = open(f).read()
+              orig = s
+              s = re.sub(r'mwdat-[A-Za-z0-9_]+', scheme, s)
+              s = s.replace("YOUR_META_APP_ID", app_id)
+              s = s.replace("YOUR_META_CLIENT_TOKEN", token)
+              s = re.sub(r'(<key>AppLinkURLScheme</key>\s*<string>)[^<]*(</string>)',
+                         r'\1%s://\2' % scheme, s)
+              if s != orig:
+                  open(f, "w").write(s)
+                  changed.append(f)
+          for f in changed:
+              print("patched:", f)
+          leftovers = [f for f in targets
+                       if "YOUR_META" in open(f).read() or "mwdat-" in open(f).read()]
+          if leftovers:
+              print("STILL HAS PLACEHOLDERS:", leftovers)
+          PY
+
       - name: Create keychain
         run: |
           security create-keychain -p ci build.keychain
