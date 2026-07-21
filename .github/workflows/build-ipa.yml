@@ -61,27 +61,26 @@ jobs:
           python3 - << 'PY'
           import os, glob, re
           app_id = os.environ['META_APP_ID']
-          token  = os.environ['META_CLIENT_TOKEN']
+          full_token = os.environ['META_CLIENT_TOKEN']
           scheme = "openglasses"
-          targets = glob.glob("**/Info*.plist", recursive=True)
           changed = []
-          for f in targets:
-              s = open(f).read()
-              orig = s
-              s = re.sub(r'mwdat-[A-Za-z0-9_]+', scheme, s)
-              s = s.replace("YOUR_META_APP_ID", app_id)
-              s = s.replace("YOUR_META_CLIENT_TOKEN", token)
+          for f in glob.glob("**/Info*.plist", recursive=True):
+              s = open(f).read(); orig = s
+              s = re.sub(r'\s*<string>mwdat-[^<]*</string>', '', s)
+              s = re.sub(r'(<key>ClientToken</key>\s*<string>)[^<]*(</string>)',
+                         lambda m: m.group(1)+full_token+m.group(2), s)
+              s = re.sub(r'(<key>MetaAppID</key>\s*<string>)[^<]*(</string>)',
+                         lambda m: m.group(1)+app_id+m.group(2), s)
               s = re.sub(r'(<key>AppLinkURLScheme</key>\s*<string>)[^<]*(</string>)',
                          r'\1%s://\2' % scheme, s)
+              s = s.replace("YOUR_META_APP_ID", app_id).replace("YOUR_META_CLIENT_TOKEN", full_token)
               if s != orig:
-                  open(f, "w").write(s)
-                  changed.append(f)
-          for f in changed:
-              print("patched:", f)
-          leftovers = [f for f in targets
-                       if "YOUR_META" in open(f).read() or "mwdat-" in open(f).read()]
-          if leftovers:
-              print("STILL HAS PLACEHOLDERS:", leftovers)
+                  open(f, "w").write(s); changed.append(f)
+          for f in changed: print("patched:", f)
+          leftovers = [f for f in glob.glob("**/Info*.plist", recursive=True)
+                       if "YOUR_" in open(f).read() or "mwdat-" in open(f).read()]
+          if leftovers: print("STILL HAS PLACEHOLDERS:", leftovers)
+          else: print("all placeholders resolved")
           PY
 
       - name: Create keychain
