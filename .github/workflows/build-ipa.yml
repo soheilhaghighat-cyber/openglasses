@@ -51,36 +51,24 @@ jobs:
           echo "remaining old group refs:"
           grep -rn "group.com.openglasses.app" --exclude-dir=.git . || echo "none"
 
-      - name: Set Meta credentials and fix URL scheme
-        env:
-          META_APP_ID: ${{ secrets.META_APP_ID }}
-          META_CLIENT_TOKEN: ${{ secrets.META_CLIENT_TOKEN }}
+      - name: Remove MWDAT (using Developer Mode) and fix URL scheme
         run: |
-          if [ -z "$META_APP_ID" ]; then echo "META_APP_ID secret missing"; exit 1; fi
-          if [ -z "$META_CLIENT_TOKEN" ]; then echo "META_CLIENT_TOKEN secret missing"; exit 1; fi
           python3 - << 'PY'
-          import os, glob, re
-          app_id = os.environ['META_APP_ID']
-          full_token = os.environ['META_CLIENT_TOKEN']
-          scheme = "openglasses"
+          import glob, re
           changed = []
           for f in glob.glob("**/Info*.plist", recursive=True):
               s = open(f).read(); orig = s
+              # remove malformed mwdat-* URL scheme entry
               s = re.sub(r'\s*<string>mwdat-[^<]*</string>', '', s)
-              s = re.sub(r'(<key>ClientToken</key>\s*<string>)[^<]*(</string>)',
-                         lambda m: m.group(1)+full_token+m.group(2), s)
-              s = re.sub(r'(<key>MetaAppID</key>\s*<string>)[^<]*(</string>)',
-                         lambda m: m.group(1)+app_id+m.group(2), s)
-              s = re.sub(r'(<key>AppLinkURLScheme</key>\s*<string>)[^<]*(</string>)',
-                         r'\1%s://\2' % scheme, s)
-              s = s.replace("YOUR_META_APP_ID", app_id).replace("YOUR_META_CLIENT_TOKEN", full_token)
+              # remove the entire MWDAT dict block (Developer Mode = do not set MWDAT)
+              s = re.sub(r'\s*<key>MWDAT</key>\s*<dict>.*?</dict>', '', s, flags=re.S)
               if s != orig:
                   open(f, "w").write(s); changed.append(f)
           for f in changed: print("patched:", f)
           leftovers = [f for f in glob.glob("**/Info*.plist", recursive=True)
-                       if "YOUR_" in open(f).read() or "mwdat-" in open(f).read()]
-          if leftovers: print("STILL HAS PLACEHOLDERS:", leftovers)
-          else: print("all placeholders resolved")
+                       if "MWDAT" in open(f).read() or "mwdat-" in open(f).read()]
+          if leftovers: print("STILL HAS MWDAT:", leftovers)
+          else: print("MWDAT removed everywhere")
           PY
 
       - name: Create keychain
